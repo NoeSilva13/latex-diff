@@ -1,0 +1,284 @@
+{
+  "name": "latex-diff",
+  "displayName": "LaTeX Diff",
+  "description": "Compare two Git commits of a LaTeX project and open a colored revision PDF via git-latexdiff.",
+  "version": "0.1.0",
+  "publisher": "noesilva",
+  "author": {
+    "name": "Javier Noe Ramos Silva",
+    "url": "https://github.com/NoeSilva13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NoeSilva13/latex-diff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NoeSilva13/latex-diff/issues"
+  },
+  "homepage": "https://github.com/NoeSilva13/latex-diff#readme",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "latex",
+    "git",
+    "latexdiff",
+    "git-latexdiff",
+    "revision"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "latexDiff",
+          "title": "LaTeX Diff",
+          "icon": "media/latex-diff.svg"
+        }
+      ]
+    },
+    "views": {
+      "latexDiff": [
+        {
+          "id": "latexDiff.actions",
+          "name": "LaTeX Diff"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "latexDiff.generate",
+        "title": "Generate PDF",
+        "category": "LaTeX Diff",
+        "icon": "$(file-pdf)"
+      },
+      {
+        "command": "latexDiff.compareCommits",
+        "title": "Compare Commits",
+        "category": "LaTeX Diff",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "latexDiff.lastCommit",
+        "title": "Last Commit",
+        "category": "LaTeX Diff",
+        "icon": "$(history)"
+      },
+      {
+        "command": "latexDiff.compareThisFile",
+        "title": "Compare this file with…",
+        "category": "LaTeX Diff",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "latexDiff.openOutputDir",
+        "title": "Open output folder",
+        "category": "LaTeX Diff",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "latexDiff.showLog",
+        "title": "Show log",
+        "category": "LaTeX Diff",
+        "icon": "$(output)"
+      },
+      {
+        "command": "latexDiff.refreshCommits",
+        "title": "Refresh commits",
+        "category": "LaTeX Diff",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "latexDiff.pickOld",
+        "title": "Pick Old commit",
+        "category": "LaTeX Diff"
+      },
+      {
+        "command": "latexDiff.pickNew",
+        "title": "Pick New commit",
+        "category": "LaTeX Diff"
+      },
+      {
+        "command": "latexDiff.pickMainFile",
+        "title": "Pick main .tex",
+        "category": "LaTeX Diff"
+      },
+      {
+        "command": "latexDiff.pickOutput",
+        "title": "Pick output PDF",
+        "category": "LaTeX Diff"
+      },
+      {
+        "command": "latexDiff.pickBibliography",
+        "title": "Pick bibliography mode",
+        "category": "LaTeX Diff"
+      },
+      {
+        "command": "latexDiff.pickEngine",
+        "title": "Pick engine",
+        "category": "LaTeX Diff"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "latexDiff.pickOld",
+          "when": "false"
+        },
+        {
+          "command": "latexDiff.pickNew",
+          "when": "false"
+        },
+        {
+          "command": "latexDiff.pickMainFile",
+          "when": "false"
+        },
+        {
+          "command": "latexDiff.pickOutput",
+          "when": "false"
+        },
+        {
+          "command": "latexDiff.pickBibliography",
+          "when": "false"
+        },
+        {
+          "command": "latexDiff.pickEngine",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "latexDiff.compareThisFile",
+          "when": "resourceExtname == .tex",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "latexDiff.compareThisFile",
+          "when": "resourceExtname == .tex",
+          "group": "latexDiff@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "latexDiff.compareThisFile",
+          "when": "resourceExtname == .tex",
+          "group": "latexDiff@1"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "latexDiff.compareCommits",
+          "when": "scmProvider == git",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "latexDiff.generate",
+          "when": "view == latexDiff.actions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "latexDiff.lastCommit",
+          "when": "view == latexDiff.actions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "latexDiff.refreshCommits",
+          "when": "view == latexDiff.actions",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "LaTeX Diff",
+      "properties": {
+        "latexDiff.mainFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the main .tex file, relative to the Git repository root. Leave empty to auto-detect."
+        },
+        "latexDiff.outputDir": {
+          "type": "string",
+          "default": "diffs",
+          "description": "Directory (relative to the repo root) for generated revision PDFs."
+        },
+        "latexDiff.outputFile": {
+          "type": "string",
+          "default": "",
+          "description": "Optional PDF file name inside outputDir (e.g. diff-output.pdf). Empty = diff-<old>-<new>.pdf."
+        },
+        "latexDiff.wholeTree": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pass --whole-tree to git latexdiff (recommended when the project has figures)."
+        },
+        "latexDiff.latexmk": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pass --latexmk to git latexdiff."
+        },
+        "latexDiff.ignoreLatexErrors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pass --ignore-latex-errors to git latexdiff."
+        },
+        "latexDiff.bibliography": {
+          "type": "string",
+          "enum": [
+            "none",
+            "bibtex",
+            "biber"
+          ],
+          "default": "none",
+          "description": "Pass --bibtex or --biber so bibliography changes appear in the PDF."
+        },
+        "latexDiff.engine": {
+          "type": "string",
+          "enum": [
+            "pdflatex",
+            "latex",
+            "xelatex",
+            "lualatex",
+            "tectonic"
+          ],
+          "default": "pdflatex",
+          "description": "LaTeX engine. pdflatex is the git-latexdiff default; others pass --latex, --xelatex, --lualatex, or --tectonic."
+        },
+        "latexDiff.lnUntracked": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --ln-untracked (symlink uncommitted files such as new figures)."
+        },
+        "latexDiff.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --verbose to git latexdiff."
+        },
+        "latexDiff.extraArgs": {
+          "type": "string",
+          "default": "",
+          "description": "Extra git-latexdiff arguments, space-separated (e.g. --type=CHANGEBAR or --latexopt=-shell-escape). --no-view is always added."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}
