@@ -257,10 +257,10 @@ async function commandCompareCommits(forcedMain?: string): Promise<void> {
 }
 
 async function commandLastCommit(): Promise<void> {
-  await session.setOld({ hash: "HEAD~1", label: "HEAD~1" });
-  await session.setNew({ hash: "HEAD", label: "HEAD" });
+  await session.setOld({ hash: "HEAD", label: "HEAD" });
+  await session.setNew({ hash: WORKING_TREE_HASH, label: WORKING_TREE_LABEL });
   sidebar.refresh();
-  await generateDiff({ oldCommit: "HEAD~1", newCommit: "HEAD" });
+  await generateDiff({ oldCommit: "HEAD", newCommit: WORKING_TREE_HASH });
 }
 
 function texUri(uri?: vscode.Uri): vscode.Uri | undefined {

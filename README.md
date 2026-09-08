@@ -23,7 +23,7 @@ The extension is **not** on the VS Code Marketplace yet. Install the `.vsix` fro
 
 ### From a GitHub Release (recommended)
 
-1. Open [Releases](https://github.com/NoeSilva13/latex-diff/releases) and download `latex-diff-0.1.1.vsix` (or the latest `.vsix`).
+1. Open [Releases](https://github.com/NoeSilva13/latex-diff/releases) and download `latex-diff-0.1.2.vsix` (or the latest `.vsix`).
 2. In VS Code or Cursor: Command Palette → **Extensions: Install from VSIX…**
 3. Select the file and reload the window.
 4. Open a LaTeX project that is a **Git** repository. Both the Old and New revisions must contain the main `.tex` file.
@@ -38,7 +38,7 @@ npm run compile
 npm run package
 ```
 
-That writes `latex-diff-0.1.1.vsix`. Install it with **Extensions: Install from VSIX…** as above.
+That writes `latex-diff-0.1.2.vsix`. Install it with **Extensions: Install from VSIX…** as above.
 
 To develop without packaging: open this folder, press **F5** (Run Extension), then in the Extension Development Host open a real LaTeX Git repo.
 
@@ -56,7 +56,7 @@ Also:
 
 - Editor title **diff** icon, or right-click a `.tex` file: uses that file as `--main`, then generates with the panel’s Old/New.
 - **Source Control** title bar: pick Old and New, then generate immediately.
-- **Last Commit**: `HEAD~1` vs `HEAD`.
+- **Last Commit**: `HEAD` vs the working tree (uncommitted changes).
 - **Refresh commits**: reload `git log` labels.
 - **Open output folder** / **Show log**.
 
@@ -74,7 +74,7 @@ A run often takes 30–90 seconds (`git latexdiff` compiles two trees). Watch **
 |---------|----------------|
 | **LaTeX Diff: Generate PDF** | Run `git latexdiff` with the panel’s Old, New, and options |
 | **LaTeX Diff: Compare Commits** | Pick Old and New, then generate |
-| **LaTeX Diff: Last Commit** | `HEAD~1` vs `HEAD` |
+| **LaTeX Diff: Last Commit** | `HEAD` vs the working tree (uncommitted changes) |
 | **LaTeX Diff: Compare this file with…** | Set `--main` to the current `.tex`, then generate |
 | **LaTeX Diff: Open output folder** | Reveal the output directory in Explorer |
 | **LaTeX Diff: Show log** | Focus the **LaTeX Diff** output channel |
@@ -122,7 +122,7 @@ Do not put `--view`, `--pdf-viewer`, or the Old/New revisions in `extraArgs`. `-
 | Progress runs a long time | Normal. Use **Show log** |
 | PDF missing after exit 0 | Open the log; the tool may have written a different path |
 | `No PDF file generated` / `Expected PDF: ./…` | `latexmk` wrote under `build/` (or another outDir). Set **Build dir** to that folder, or `latexDiff.buildDir` |
-| `HEAD~1` fails on Last Commit | Only one commit, or the file did not exist in the previous commit. Change **Old commit** |
+| Last Commit PDF looks empty | No uncommitted edits, or they match `HEAD`. Edit the `.tex` first, or pick two commits under Options |
 | Bibliography unchanged | Set **Bibliography** to `bibtex` or `biber` |
 | minted / TikZ shell tools fail | Add `--latexopt=-shell-escape` to `latexDiff.extraArgs` |
 

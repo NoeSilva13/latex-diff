@@ -132,7 +132,7 @@ export class LatexDiffSidebarProvider implements vscode.TreeDataProvider<ActionI
       new ActionItem("last", "Last Commit", {
         command: "latexDiff.lastCommit",
         icon: "history",
-        tooltip: "Compare HEAD~1 with HEAD.",
+        tooltip: "Compare HEAD with the working tree (uncommitted changes).",
       }),
       new ActionItem("refresh", "Refresh commits", {
         command: "latexDiff.refreshCommits",
