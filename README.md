@@ -42,6 +42,10 @@ That writes `latex-diff-0.1.2.vsix`. Install it with **Extensions: Install from 
 
 To develop without packaging: open this folder, press **F5** (Run Extension), then in the Extension Development Host open a real LaTeX Git repo.
 
+## Example project
+
+Clone [collaborative-latex-git](https://github.com/NoeSilva13/collaborative-latex-git) for an English Win/Mac/Linux install guide, an IEEE journal sample you can replace with any template, and a clone-and-compile Git workflow that uses this extension.
+
 ## Use
 
 You do not need the Command Palette for everyday use.
