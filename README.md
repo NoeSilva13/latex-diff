@@ -2,6 +2,8 @@
 
 Compare two Git revisions of a LaTeX project and open a colored PDF. This is a native VS Code / Cursor extension: Activity Bar panel, editor title button, Quick Pick, Progress, and an Output channel. It runs `git latexdiff`; it does **not** ship TeX, Perl, or `git-latexdiff`.
 
+![LaTeX Diff demo: generate a colored revision PDF from the sidebar](media/demo.gif)
+
 Author: [Javier Noe Ramos Silva](https://github.com/NoeSilva13) (`NoeSilva13`).
 
 ## Requirements
