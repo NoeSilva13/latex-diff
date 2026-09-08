@@ -2,7 +2,7 @@
   "name": "latex-diff",
   "displayName": "LaTeX Diff",
   "description": "Compare two Git commits of a LaTeX project and open a colored revision PDF via git-latexdiff.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "noesilva",
   "author": {
     "name": "Javier Noe Ramos Silva",
@@ -114,6 +114,11 @@
         "category": "LaTeX Diff"
       },
       {
+        "command": "latexDiff.pickBuildDir",
+        "title": "Pick latexmk build directory",
+        "category": "LaTeX Diff"
+      },
+      {
         "command": "latexDiff.pickBibliography",
         "title": "Pick bibliography mode",
         "category": "LaTeX Diff"
@@ -140,6 +145,10 @@
         },
         {
           "command": "latexDiff.pickOutput",
+          "when": "false"
+        },
+        {
+          "command": "latexDiff.pickBuildDir",
           "when": "false"
         },
         {
@@ -214,6 +223,11 @@
           "type": "string",
           "default": "",
           "description": "Optional PDF file name inside outputDir (e.g. diff-output.pdf). Empty = diff-<old>-<new>.pdf."
+        },
+        "latexDiff.buildDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory where latexmk writes the manuscript PDF (passed as --build-dir). Empty = auto-detect from latex-workshop.latex.outDir or .latexmkrc, otherwise project root."
         },
         "latexDiff.wholeTree": {
           "type": "boolean",

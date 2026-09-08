@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { outputDisplay, readSettings, type BoolSetting } from "./config";
+import { outputDisplay, readSettings, resolveBuildDir, type BoolSetting } from "./config";
 import { findRepoRoot } from "./git";
 import { describeMainFile } from "./mainFile";
 import type { DiffSession } from "./session";
@@ -44,6 +44,21 @@ export class ActionItem extends vscode.TreeItem {
   }
 
   readonly setting?: BoolSetting;
+}
+
+function buildDirLabel(cwd: string | undefined, configured: string): string {
+  if (configured) {
+    return configured;
+  }
+  if (!cwd) {
+    return "Auto";
+  }
+  try {
+    const resolved = resolveBuildDir(cwd, "");
+    return resolved ? `Auto (${resolved})` : "Auto (project root)";
+  } catch {
+    return "Auto";
+  }
 }
 
 function workspaceCwd(): string | undefined {
@@ -166,6 +181,13 @@ export class LatexDiffSidebarProvider implements vscode.TreeDataProvider<ActionI
         icon: "export",
         description: outputDisplay(settings),
         tooltip: "Folder or PDF path relative to the repository.",
+      }),
+      new ActionItem("buildDir", "Build dir (--build-dir)", {
+        command: "latexDiff.pickBuildDir",
+        icon: "folder",
+        description: buildDirLabel(cwd, settings.buildDir),
+        tooltip:
+          "Where latexmk writes the manuscript PDF. Auto-detects latex-workshop.latex.outDir or .latexmkrc.",
       }),
       new ActionItem("wholeTree", "--whole-tree", {
         icon: "files",

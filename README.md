@@ -23,7 +23,7 @@ The extension is **not** on the VS Code Marketplace yet. Install the `.vsix` fro
 
 ### From a GitHub Release (recommended)
 
-1. Open [Releases](https://github.com/NoeSilva13/latex-diff/releases) and download `latex-diff-0.1.0.vsix` (or the latest `.vsix`).
+1. Open [Releases](https://github.com/NoeSilva13/latex-diff/releases) and download `latex-diff-0.1.1.vsix` (or the latest `.vsix`).
 2. In VS Code or Cursor: Command Palette → **Extensions: Install from VSIX…**
 3. Select the file and reload the window.
 4. Open a LaTeX project that is a **Git** repository. Both the Old and New revisions must contain the main `.tex` file.
@@ -38,7 +38,7 @@ npm run compile
 npm run package
 ```
 
-That writes `latex-diff-0.1.0.vsix`. Install it with **Extensions: Install from VSIX…** as above.
+That writes `latex-diff-0.1.1.vsix`. Install it with **Extensions: Install from VSIX…** as above.
 
 To develop without packaging: open this folder, press **F5** (Run Extension), then in the Extension Development Host open a real LaTeX Git repo.
 
@@ -47,7 +47,7 @@ To develop without packaging: open this folder, press **F5** (Run Extension), th
 You do not need the Command Palette for everyday use.
 
 1. Click the **LaTeX Diff** icon in the Activity Bar (left).
-2. Under **Options**, set **Old commit**, **New commit**, **Main .tex**, and **Output PDF**. Toggle `--whole-tree`, `--latexmk`, and `--ignore-latex-errors`. Optionally set Bibliography, Engine, `--ln-untracked`, and `--verbose`.
+2. Under **Options**, set **Old commit**, **New commit**, **Main .tex**, and **Output PDF**. Toggle `--whole-tree`, `--latexmk`, and `--ignore-latex-errors`. **Build dir** is auto-detected from LaTeX Workshop or `.latexmkrc` when latexmk writes to `build/` (or similar). Optionally set Bibliography, Engine, `--ln-untracked`, and `--verbose`.
 3. Under **Run**, click **Generate PDF**.
 
 The first time you open a repo, Old defaults to the previous commit and New to **HEAD**.
@@ -89,6 +89,7 @@ Panel checkboxes and picks write **workspace** settings when a folder is open (s
 | `latexDiff.mainFile` | `""` | Main `.tex` relative to the repo root. Empty = auto (setting, then the active `.tex`, then a unique `\documentclass` file, then a picker) |
 | `latexDiff.outputDir` | `diffs` | Output directory for revision PDFs |
 | `latexDiff.outputFile` | `""` | Optional name inside `outputDir`. Empty = `diff-<old>-<new>.pdf` |
+| `latexDiff.buildDir` | `""` | latexmk output folder (`--build-dir`). Empty = auto from Workshop `outDir` or `.latexmkrc` |
 | `latexDiff.wholeTree` | `true` | `--whole-tree` (needed when figures live outside the main file) |
 | `latexDiff.latexmk` | `true` | `--latexmk` |
 | `latexDiff.ignoreLatexErrors` | `true` | `--ignore-latex-errors` |
@@ -106,7 +107,9 @@ Panel checkboxes and picks write **workspace** settings when a folder is open (s
 --cleanup none --tmpdirprefix ./diffs/tmp
 ```
 
-Useful extras: `--subtree`, `--no-flatten`, `--latexdiff-flatten`, `--cleanup`, `--tmpdirprefix`, `--latexopt`, `--prepare`, `--filter`, `--latexpand`, `--build-dir`, `--ignore-makefile`, `--early-exit-if-equal`, `--ln-untracked-dir`. See `git latexdiff --help`.
+When `latexmk` is on and the project writes PDFs to a folder such as `build/` (`.latexmkrc` `$out_dir` or LaTeX Workshop `outDir`), the extension adds `--build-dir` so `git-latexdiff` can find the PDF. Override with **Build dir** in the sidebar or `latexDiff.buildDir`.
+
+Useful extras: `--subtree`, `--no-flatten`, `--latexdiff-flatten`, `--cleanup`, `--tmpdirprefix`, `--latexopt`, `--prepare`, `--filter`, `--latexpand`, `--ignore-makefile`, `--early-exit-if-equal`, `--ln-untracked-dir`. See `git latexdiff --help`.
 
 Do not put `--view`, `--pdf-viewer`, or the Old/New revisions in `extraArgs`. `--no-view` is always added.
 
@@ -118,6 +121,7 @@ Do not put `--view`, `--pdf-viewer`, or the Old/New revisions in `extraArgs`. `-
 | File does not exist in old revision | The Old commit predates that `.tex` file. Pick a later commit |
 | Progress runs a long time | Normal. Use **Show log** |
 | PDF missing after exit 0 | Open the log; the tool may have written a different path |
+| `No PDF file generated` / `Expected PDF: ./…` | `latexmk` wrote under `build/` (or another outDir). Set **Build dir** to that folder, or `latexDiff.buildDir` |
 | `HEAD~1` fails on Last Commit | Only one commit, or the file did not exist in the previous commit. Change **Old commit** |
 | Bibliography unchanged | Set **Bibliography** to `bibtex` or `biber` |
 | minted / TikZ shell tools fail | Add `--latexopt=-shell-escape` to `latexDiff.extraArgs` |

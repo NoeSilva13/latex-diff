@@ -3,9 +3,11 @@ import * as vscode from "vscode";
 import {
   BIBLIOGRAPHIES,
   ENGINES,
+  extraArgsHasBuildDir,
   outputDisplay,
   parseOutputInput,
   readSettings,
+  resolveBuildDir,
   updateConfig,
   type BoolSetting,
 } from "./config";
@@ -130,6 +132,9 @@ async function generateDiff(opts: {
   await ensureTexInCommits(repoRoot, mainFile, opts.oldCommit, opts.newCommit);
 
   const flags = readSettings();
+  const buildDir = extraArgsHasBuildDir(flags.extraArgs)
+    ? ""
+    : resolveBuildDir(repoRoot, flags.buildDir);
   const channel = logChannel();
   channel.clear();
   channel.show(true);
@@ -138,6 +143,9 @@ async function generateDiff(opts: {
   channel.appendLine(`Old:        ${opts.oldCommit}`);
   channel.appendLine(`New:        ${opts.newCommit}`);
   channel.appendLine(`Output:     ${outputDisplay(flags)}`);
+  if (flags.latexmk && buildDir) {
+    channel.appendLine(`Build dir:  ${buildDir}`);
+  }
   channel.appendLine("");
 
   const result = await vscode.window.withProgress(
@@ -163,12 +171,19 @@ async function generateDiff(opts: {
           lnUntracked: flags.lnUntracked,
           verbose: flags.verbose,
           extraArgs: flags.extraArgs,
+          buildDir,
         },
         (chunk) => channel.append(chunk)
       )
   );
 
   if (result.exitCode !== 0) {
+    const combined = `${result.stdout}\n${result.stderr}`;
+    if (/No PDF file generated/i.test(combined) || /Expected PDF:/i.test(combined)) {
+      throw new Error(
+        `git latexdiff failed (exit ${result.exitCode}): latexmk wrote the PDF under a build folder, but git-latexdiff looked in the project root. Set latexDiff.buildDir (for example build) or add --build-dir to extraArgs. See the LaTeX Diff output channel.`
+      );
+    }
     throw new Error(
       `git latexdiff failed (exit ${result.exitCode}). See the LaTeX Diff output channel.`
     );
@@ -336,6 +351,27 @@ async function commandPickOutput(): Promise<void> {
   await updateConfig("outputFile", parsed.outputFile);
 }
 
+async function commandPickBuildDir(): Promise<void> {
+  const settings = readSettings();
+  let placeholder = settings.buildDir;
+  try {
+    const repoRoot = await findRepoRoot(workspaceCwd());
+    placeholder = resolveBuildDir(repoRoot, settings.buildDir) || settings.buildDir;
+  } catch {
+    // not a git repo
+  }
+  const value = await vscode.window.showInputBox({
+    title: "LaTeX Diff: latexmk build directory",
+    value: settings.buildDir,
+    placeHolder: placeholder || "build",
+    prompt: "Relative folder where latexmk writes the PDF (--build-dir). Empty = auto-detect.",
+  });
+  if (value === undefined) {
+    return;
+  }
+  await updateConfig("buildDir", value.trim());
+}
+
 async function commandPickBibliography(): Promise<void> {
   const picked = await vscode.window.showQuickPick(
     BIBLIOGRAPHIES.map((id) => ({
@@ -438,6 +474,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("latexDiff.pickNew", wrap(commandPickNew)),
     vscode.commands.registerCommand("latexDiff.pickMainFile", wrap(commandPickMainFile)),
     vscode.commands.registerCommand("latexDiff.pickOutput", wrap(commandPickOutput)),
+    vscode.commands.registerCommand("latexDiff.pickBuildDir", wrap(commandPickBuildDir)),
     vscode.commands.registerCommand("latexDiff.pickBibliography", wrap(commandPickBibliography)),
     vscode.commands.registerCommand("latexDiff.pickEngine", wrap(commandPickEngine))
   );

@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { Bibliography, Engine } from "./config";
+import { extraArgsHasBuildDir, type Bibliography, type Engine } from "./config";
 import { WORKING_TREE_HASH } from "./git";
 
 export interface LatexDiffOptions {
@@ -19,6 +19,7 @@ export interface LatexDiffOptions {
   lnUntracked: boolean;
   verbose: boolean;
   extraArgs: string[];
+  buildDir: string;
 }
 
 export interface LatexDiffResult {
@@ -52,6 +53,9 @@ export function buildCommand(opts: LatexDiffOptions): { args: string[]; outputPd
   }
   if (opts.latexmk) {
     args.push("--latexmk");
+    if (opts.buildDir && !extraArgsHasBuildDir(opts.extraArgs)) {
+      args.push("--build-dir", opts.buildDir);
+    }
   }
   if (opts.ignoreLatexErrors) {
     args.push("--ignore-latex-errors");
