@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { resolveChoice, type ChoiceKey, type Choices } from "./choices";
 
 export const BIBLIOGRAPHIES = ["none", "bibtex", "biber"] as const;
 export const ENGINES = ["pdflatex", "latex", "xelatex", "lualatex", "tectonic"] as const;
@@ -45,20 +46,69 @@ function asEnum<T extends string>(value: string | undefined, allowed: readonly T
   return fallback;
 }
 
+const CHOICES_STATE_KEY = "latexDiff.panelChoices";
+
+let choicesState: vscode.Memento | undefined;
+const choicesChanged = new vscode.EventEmitter<void>();
+
+/** Fires when a panel choice is saved or reset, so the sidebar can redraw. */
+export const onDidChangeChoices = choicesChanged.event;
+
+export function initChoices(context: vscode.ExtensionContext): void {
+  choicesState = context.workspaceState;
+  context.subscriptions.push(choicesChanged);
+}
+
+function readChoices(): Choices {
+  return choicesState?.get<Choices>(CHOICES_STATE_KEY) ?? {};
+}
+
+/**
+ * Saves a choice made in the panel. It lives in VS Code's per-workspace storage,
+ * never in `.vscode/settings.json`, so the user's repository stays untouched.
+ */
+export async function setChoice(key: ChoiceKey, value: string | boolean): Promise<void> {
+  await choicesState?.update(CHOICES_STATE_KEY, { ...readChoices(), [key]: value });
+  choicesChanged.fire();
+}
+
+export function hasChoices(): boolean {
+  return Object.keys(readChoices()).length > 0;
+}
+
+export async function resetChoices(): Promise<void> {
+  await choicesState?.update(CHOICES_STATE_KEY, undefined);
+  choicesChanged.fire();
+}
+
+/** Effective options: panel choices first, then `latexDiff.*` settings, then defaults. */
 export function readSettings(): DiffSettings {
   const cfg = vscode.workspace.getConfiguration("latexDiff");
+  const choices = readChoices();
+  const text = (key: ChoiceKey, fallback: string): string =>
+    resolveChoice(choices, key, cfg.get<string>(key), fallback).trim() || fallback;
+  const flag = (key: ChoiceKey, fallback: boolean): boolean =>
+    resolveChoice(choices, key, cfg.get<boolean>(key), fallback);
   return {
-    mainFile: (cfg.get<string>("mainFile") ?? "").trim(),
-    outputDir: (cfg.get<string>("outputDir") ?? "diffs").trim() || "diffs",
-    outputFile: (cfg.get<string>("outputFile") ?? "").trim(),
-    buildDir: (cfg.get<string>("buildDir") ?? "").trim(),
-    wholeTree: cfg.get<boolean>("wholeTree") ?? true,
-    latexmk: cfg.get<boolean>("latexmk") ?? true,
-    ignoreLatexErrors: cfg.get<boolean>("ignoreLatexErrors") ?? true,
-    bibliography: asEnum(cfg.get<string>("bibliography"), BIBLIOGRAPHIES, "none"),
-    engine: asEnum(cfg.get<string>("engine"), ENGINES, "pdflatex"),
-    lnUntracked: cfg.get<boolean>("lnUntracked") ?? false,
-    verbose: cfg.get<boolean>("verbose") ?? false,
+    mainFile: text("mainFile", ""),
+    outputDir: text("outputDir", "diffs"),
+    outputFile: text("outputFile", ""),
+    buildDir: text("buildDir", ""),
+    wholeTree: flag("wholeTree", true),
+    latexmk: flag("latexmk", true),
+    ignoreLatexErrors: flag("ignoreLatexErrors", true),
+    bibliography: asEnum(
+      resolveChoice(choices, "bibliography", cfg.get<string>("bibliography"), "none"),
+      BIBLIOGRAPHIES,
+      "none"
+    ),
+    engine: asEnum(
+      resolveChoice(choices, "engine", cfg.get<string>("engine"), "pdflatex"),
+      ENGINES,
+      "pdflatex"
+    ),
+    lnUntracked: flag("lnUntracked", false),
+    verbose: flag("verbose", false),
     extraArgs: splitExtraArgs(cfg.get<string>("extraArgs") ?? ""),
   };
 }
@@ -89,11 +139,4 @@ export function parseOutputInput(
     return { outputDir: currentDir || "diffs", outputFile: trimmed };
   }
   return { outputDir: trimmed.replace(/\/$/, "") || "diffs", outputFile: "" };
-}
-
-export async function updateConfig(key: string, value: unknown): Promise<void> {
-  const target = vscode.workspace.workspaceFolders?.length
-    ? vscode.ConfigurationTarget.Workspace
-    : vscode.ConfigurationTarget.Global;
-  await vscode.workspace.getConfiguration("latexDiff").update(key, value, target);
 }

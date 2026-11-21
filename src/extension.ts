@@ -12,12 +12,17 @@ import {
 import {
   BIBLIOGRAPHIES,
   ENGINES,
+  hasChoices,
+  initChoices,
+  onDidChangeChoices,
   outputDisplay,
   parseOutputInput,
   readSettings,
-  updateConfig,
+  resetChoices,
+  setChoice,
   type BoolSetting,
 } from "./config";
+import { Exclusive } from "./exclusive";
 import {
   WORKING_TREE_HASH,
   WORKING_TREE_LABEL,
@@ -33,10 +38,12 @@ import { runGitLatexdiff } from "./latexdiff";
 import { pickMainFile, resolveMainFile } from "./mainFile";
 import { DiffSession, type StoredRef } from "./session";
 import { ActionItem, LatexDiffSidebarProvider } from "./sidebar";
+import { hasDocumentclass } from "./tex";
 
 let output: vscode.OutputChannel | undefined;
 let session: DiffSession;
 let sidebar: LatexDiffSidebarProvider;
+const diffLock = new Exclusive();
 
 function logChannel(): vscode.OutputChannel {
   if (!output) {
@@ -184,10 +191,12 @@ async function generateDiff(opts: {
     {
       location: vscode.ProgressLocation.Notification,
       title: "LaTeX Diff: generating revision PDF…",
-      cancellable: false,
+      cancellable: true,
     },
-    async () =>
-      runGitLatexdiff(
+    async (_progress, token) => {
+      const abort = new AbortController();
+      token.onCancellationRequested(() => abort.abort());
+      return runGitLatexdiff(
         {
           repoRoot,
           mainFile,
@@ -205,9 +214,17 @@ async function generateDiff(opts: {
           extraArgs: flags.extraArgs,
           buildDir,
         },
-        (chunk) => channel.append(chunk)
-      )
+        (chunk) => channel.append(chunk),
+        abort.signal
+      );
+    }
   );
+
+  if (result.cancelled) {
+    channel.appendLine("\nCancelled.");
+    void vscode.window.showInformationMessage("LaTeX Diff: cancelled.");
+    return;
+  }
 
   if (result.exitCode !== 0) {
     const combined = `${result.stdout}\n${result.stderr}`;
@@ -293,9 +310,7 @@ async function commandCompareCommits(forcedMain?: string): Promise<void> {
 }
 
 async function commandLastCommit(): Promise<void> {
-  await session.setOld({ hash: "HEAD", label: "HEAD" });
-  await session.setNew({ hash: WORKING_TREE_HASH, label: WORKING_TREE_LABEL });
-  sidebar.refresh();
+  // One-off shortcut: it must not overwrite the Old/New the user picked in the panel.
   await generateDiff({ oldCommit: "HEAD", newCommit: WORKING_TREE_HASH });
 }
 
@@ -317,8 +332,18 @@ async function commandCompareThisFile(uri?: vscode.Uri): Promise<void> {
   }
   const repoRoot = await findRepoRoot(file.fsPath);
   const rel = path.relative(repoRoot, file.fsPath).split(path.sep).join("/");
-  await updateConfig("mainFile", rel);
-  sidebar.refresh();
+  const text = Buffer.from(await vscode.workspace.fs.readFile(file)).toString("utf8");
+  if (!hasDocumentclass(text)) {
+    const choice = await vscode.window.showWarningMessage(
+      `${rel} has no \\documentclass, so it looks like a section file, not the main document.`,
+      { modal: true, detail: "git latexdiff compiles the --main file. Use it anyway?" },
+      "Use anyway"
+    );
+    if (choice !== "Use anyway") {
+      return;
+    }
+  }
+  // For this run only: it is not saved to the settings or the panel.
   await commandGenerate(rel);
 }
 
@@ -369,7 +394,7 @@ async function commandPickMainFile(): Promise<void> {
   if (picked === undefined) {
     return;
   }
-  await updateConfig("mainFile", picked);
+  await setChoice("mainFile", picked);
 }
 
 async function commandPickOutput(): Promise<void> {
@@ -383,8 +408,8 @@ async function commandPickOutput(): Promise<void> {
     return;
   }
   const parsed = parseOutputInput(value, settings.outputDir);
-  await updateConfig("outputDir", parsed.outputDir);
-  await updateConfig("outputFile", parsed.outputFile);
+  await setChoice("outputDir", parsed.outputDir);
+  await setChoice("outputFile", parsed.outputFile);
 }
 
 async function commandPickBuildDir(): Promise<void> {
@@ -399,7 +424,7 @@ async function commandPickBuildDir(): Promise<void> {
   if (value === undefined) {
     return;
   }
-  await updateConfig("buildDir", value.trim());
+  await setChoice("buildDir", value.trim());
 }
 
 async function commandPickBibliography(): Promise<void> {
@@ -413,7 +438,7 @@ async function commandPickBibliography(): Promise<void> {
   if (!picked) {
     return;
   }
-  await updateConfig("bibliography", picked.label);
+  await setChoice("bibliography", picked.label);
 }
 
 async function commandPickEngine(): Promise<void> {
@@ -427,7 +452,18 @@ async function commandPickEngine(): Promise<void> {
   if (!picked) {
     return;
   }
-  await updateConfig("engine", picked.label);
+  await setChoice("engine", picked.label);
+}
+
+async function commandResetChoices(): Promise<void> {
+  if (!hasChoices()) {
+    void vscode.window.showInformationMessage("LaTeX Diff: no panel choices to reset.");
+    return;
+  }
+  await resetChoices();
+  void vscode.window.showInformationMessage(
+    "LaTeX Diff: panel choices reset. The latexDiff.* settings apply again."
+  );
 }
 
 async function applyCheckbox(item: ActionItem, checked: boolean): Promise<void> {
@@ -435,7 +471,7 @@ async function applyCheckbox(item: ActionItem, checked: boolean): Promise<void> 
     return;
   }
   const key: BoolSetting = item.setting;
-  await updateConfig(key, checked);
+  await setChoice(key, checked);
 }
 
 function asErrorMessage(err: unknown): string {
@@ -457,6 +493,18 @@ function wrap<T extends unknown[]>(run: (...args: T) => Promise<void>): (...args
   };
 }
 
+/** Refuses to start a second diff while one is running (they would write the same PDF). */
+function exclusive<T extends unknown[]>(run: (...args: T) => Promise<void>): (...args: T) => Promise<void> {
+  return async (...args: T) => {
+    const outcome = await diffLock.run(() => run(...args));
+    if (!outcome.ran) {
+      void vscode.window.showInformationMessage(
+        "LaTeX Diff: a diff is already running. Wait for it to finish, or cancel it from the progress notification."
+      );
+    }
+  };
+}
+
 async function bootstrap(): Promise<void> {
   try {
     const repoRoot = await findRepoRoot(workspaceCwd());
@@ -468,6 +516,7 @@ async function bootstrap(): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  initChoices(context);
   session = new DiffSession(context);
   sidebar = new LatexDiffSidebarProvider(session);
   const tree = vscode.window.createTreeView("latexDiff.actions", {
@@ -484,6 +533,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       }
     }),
+    onDidChangeChoices(() => sidebar.refresh()),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("latexDiff")) {
         sidebar.refresh();
@@ -493,10 +543,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void bootstrap();
     }),
-    vscode.commands.registerCommand("latexDiff.generate", wrap(() => commandGenerate())),
-    vscode.commands.registerCommand("latexDiff.compareCommits", wrap(() => commandCompareCommits())),
-    vscode.commands.registerCommand("latexDiff.lastCommit", wrap(commandLastCommit)),
-    vscode.commands.registerCommand("latexDiff.compareThisFile", wrap(commandCompareThisFile)),
+    vscode.commands.registerCommand("latexDiff.generate", wrap(exclusive(() => commandGenerate()))),
+    vscode.commands.registerCommand(
+      "latexDiff.compareCommits",
+      wrap(exclusive(() => commandCompareCommits()))
+    ),
+    vscode.commands.registerCommand("latexDiff.lastCommit", wrap(exclusive(commandLastCommit))),
+    vscode.commands.registerCommand(
+      "latexDiff.compareThisFile",
+      wrap(exclusive(commandCompareThisFile))
+    ),
+    vscode.commands.registerCommand("latexDiff.resetChoices", wrap(commandResetChoices)),
     vscode.commands.registerCommand("latexDiff.openOutputDir", wrap(commandOpenOutputDir)),
     vscode.commands.registerCommand("latexDiff.showLog", wrap(commandShowLog)),
     vscode.commands.registerCommand("latexDiff.refreshCommits", wrap(commandRefreshCommits)),

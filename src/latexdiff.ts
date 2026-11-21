@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { extraArgsHasBuildDir } from "./buildDir";
@@ -29,6 +29,8 @@ export interface LatexDiffResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** True when the run was stopped through the abort signal. */
+  cancelled: boolean;
 }
 
 function safeSlug(ref: string): string {
@@ -85,23 +87,61 @@ export function buildCommand(opts: LatexDiffOptions): { args: string[]; outputPd
   return { args, outputPdf };
 }
 
+const FORCE_KILL_AFTER_MS = 5000;
+
+/**
+ * Stops `git latexdiff` and everything it started (the script, latexmk, pdflatex).
+ * Killing only the `git` process would leave the compile running. On POSIX the
+ * child is a process-group leader (`detached`), so a negative pid reaches the whole
+ * group; on Windows `taskkill /T` walks the tree.
+ */
+function killTree(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (!child.pid) {
+    return;
+  }
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
 export async function runGitLatexdiff(
   opts: LatexDiffOptions,
-  onLog?: (chunk: string) => void
+  onLog?: (chunk: string) => void,
+  abortSignal?: AbortSignal
 ): Promise<LatexDiffResult> {
   const { args, outputPdf } = buildCommand(opts);
-  await fs.mkdir(path.dirname(outputPdf), { recursive: true });
-
   const command = ["git", ...args].join(" ");
+
+  if (abortSignal?.aborted) {
+    return { command, outputPdf, stdout: "", stderr: "", exitCode: 1, cancelled: true };
+  }
+
+  await fs.mkdir(path.dirname(outputPdf), { recursive: true });
   onLog?.(`Running:\n  ${command}\n\n`);
 
   return await new Promise((resolve, reject) => {
     const child = spawn("git", args, {
       cwd: opts.repoRoot,
       env: process.env,
+      detached: process.platform !== "win32",
     });
     let stdout = "";
     let stderr = "";
+    let cancelled = false;
+    let forceKillTimer: NodeJS.Timeout | undefined;
+
+    const onAbort = (): void => {
+      cancelled = true;
+      killTree(child, "SIGTERM");
+      forceKillTimer = setTimeout(() => killTree(child, "SIGKILL"), FORCE_KILL_AFTER_MS);
+    };
+    abortSignal?.addEventListener("abort", onAbort, { once: true });
 
     child.stdout.on("data", (buf: Buffer) => {
       const text = buf.toString();
@@ -114,15 +154,20 @@ export async function runGitLatexdiff(
       onLog?.(text);
     });
     child.on("error", (err) => {
+      abortSignal?.removeEventListener("abort", onAbort);
+      clearTimeout(forceKillTimer);
       reject(err);
     });
     child.on("close", (code) => {
+      abortSignal?.removeEventListener("abort", onAbort);
+      clearTimeout(forceKillTimer);
       resolve({
         command,
         outputPdf,
         stdout,
         stderr,
         exitCode: code ?? 1,
+        cancelled,
       });
     });
   });

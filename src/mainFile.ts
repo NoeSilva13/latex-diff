@@ -1,5 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { readSettings } from "./config";
+import { hasDocumentclass } from "./tex";
 
 function toPosix(p: string): string {
   return p.split(path.sep).join("/");
@@ -21,7 +23,7 @@ async function findDocumentclassFiles(
   for (const uri of uris) {
     const bytes = await vscode.workspace.fs.readFile(uri);
     const text = Buffer.from(bytes).toString("utf8");
-    if (/\\documentclass\b/.test(text)) {
+    if (hasDocumentclass(text)) {
       matches.push(uri);
     }
   }
@@ -35,13 +37,29 @@ function workspaceFolderFor(repoRoot: string): vscode.WorkspaceFolder | undefine
   );
 }
 
+/**
+ * The open editor's file, only when it is a main document. A section file pulled
+ * in with \input / \include has no \documentclass and must never become --main.
+ */
+function activeMainDocument(): vscode.TextDocument | undefined {
+  const active = vscode.window.activeTextEditor?.document;
+  if (
+    active?.uri.scheme === "file" &&
+    active.fileName.endsWith(".tex") &&
+    hasDocumentclass(active.getText())
+  ) {
+    return active;
+  }
+  return undefined;
+}
+
 export function describeMainFile(repoRoot?: string): string {
-  const configured = (vscode.workspace.getConfiguration("latexDiff").get<string>("mainFile") ?? "").trim();
+  const configured = readSettings().mainFile;
   if (configured) {
     return configured;
   }
-  const active = vscode.window.activeTextEditor?.document;
-  if (active?.uri.scheme === "file" && active.fileName.endsWith(".tex")) {
+  const active = activeMainDocument();
+  if (active) {
     if (repoRoot) {
       return relativeToRepo(repoRoot, active.fileName);
     }
@@ -65,7 +83,7 @@ export async function pickMainFile(repoRoot: string): Promise<string | undefined
   }
 
   items.push({ label: "Browse…", description: "Pick a .tex file", browse: true });
-  items.push({ label: "Auto-detect", description: "Clear latexDiff.mainFile", clear: true });
+  items.push({ label: "Auto-detect", description: "Use the open main document, or find \\documentclass", clear: true });
 
   const picked = await vscode.window.showQuickPick(items, {
     title: "LaTeX Diff: Main .tex",
@@ -100,14 +118,13 @@ export async function resolveMainFile(
     return toPosix(forcedRelative);
   }
 
-  const config = vscode.workspace.getConfiguration("latexDiff");
-  const configured = (config.get<string>("mainFile") ?? "").trim();
+  const configured = readSettings().mainFile;
   if (configured) {
     return toPosix(configured);
   }
 
-  const active = vscode.window.activeTextEditor?.document;
-  if (active?.uri.scheme === "file" && active.fileName.endsWith(".tex")) {
+  const active = activeMainDocument();
+  if (active) {
     return relativeToRepo(repoRoot, active.fileName);
   }
 
@@ -134,6 +151,6 @@ export async function resolveMainFile(
   }
 
   throw new Error(
-    "Could not find a main .tex file. Open one, or set latexDiff.mainFile."
+    "Could not find a main .tex file (one containing \\documentclass). Open it, or set it under Options → Main .tex."
   );
 }

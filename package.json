@@ -2,7 +2,7 @@
   "name": "latex-diff",
   "displayName": "LaTeX Diff",
   "description": "Compare two Git commits of a LaTeX project and open a colored revision PDF via git-latexdiff.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "noesilva",
   "author": {
     "name": "Javier Noe Ramos Silva",
@@ -92,6 +92,11 @@
         "title": "Refresh commits",
         "category": "LaTeX Diff",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "latexDiff.resetChoices",
+        "title": "Reset panel choices",
+        "category": "LaTeX Diff"
       },
       {
         "command": "latexDiff.pickOld",

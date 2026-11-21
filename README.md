@@ -25,7 +25,7 @@ The extension is **not** on the VS Code Marketplace yet. Install the `.vsix` fro
 
 ### From a GitHub Release (recommended)
 
-1. Open [Releases](https://github.com/NoeSilva13/latex-diff/releases) and download `latex-diff-0.1.3.vsix` (or the latest `.vsix`).
+1. Open [Releases](https://github.com/NoeSilva13/latex-diff/releases) and download `latex-diff-0.1.4.vsix` (or the latest `.vsix`).
 2. In VS Code or Cursor: Command Palette → **Extensions: Install from VSIX…**
 3. Select the file and reload the window.
 4. Open a LaTeX project that is a **Git** repository. Both the Old and New revisions must contain the main `.tex` file.
@@ -40,7 +40,7 @@ npm run compile
 npm run package
 ```
 
-That writes `latex-diff-0.1.3.vsix`. Install it with **Extensions: Install from VSIX…** as above.
+That writes `latex-diff-0.1.4.vsix`. Install it with **Extensions: Install from VSIX…** as above.
 
 To develop without packaging: open this folder, press **F5** (Run Extension), then in the Extension Development Host open a real LaTeX Git repo.
 
@@ -60,9 +60,9 @@ The first time you open a repo, Old defaults to the previous commit and New to *
 
 Also:
 
-- Editor title **diff** icon, or right-click a `.tex` file: uses that file as `--main`, then generates with the panel’s Old/New.
+- Editor title **diff** icon, or right-click a `.tex` file: uses that file as `--main` for this run only (nothing is saved), with the panel’s Old/New. If the file has no `\documentclass` (a section pulled in with `\input`), you are asked to confirm.
 - **Source Control** title bar: pick Old and New, then generate immediately.
-- **Last Commit**: `HEAD` vs the working tree (uncommitted changes).
+- **Last Commit**: `HEAD` vs the working tree (uncommitted changes). A one-off shortcut: it does not change the Old/New you picked in the panel.
 - **Refresh commits**: reload `git log` labels.
 - **Open output folder** / **Show log**.
 
@@ -74,6 +74,8 @@ By default the PDF is `diffs/diff-<old>-<new>.pdf` under the repository root. Se
 
 A run often takes 30–90 seconds (`git latexdiff` compiles two trees). Watch **Output → LaTeX Diff**.
 
+Use the **Cancel** button on the progress notification to stop a run. It stops `git latexdiff` and the `latexmk`/`pdflatex` it started. Only one diff runs at a time: starting a second one shows a message instead. A cancelled run can leave a `git-latexdiff.*` folder in your system temp directory; it is safe to delete.
+
 ## Commands
 
 | Command | What it does |
@@ -81,18 +83,19 @@ A run often takes 30–90 seconds (`git latexdiff` compiles two trees). Watch **
 | **LaTeX Diff: Generate PDF** | Run `git latexdiff` with the panel’s Old, New, and options |
 | **LaTeX Diff: Compare Commits** | Pick Old and New, then generate |
 | **LaTeX Diff: Last Commit** | `HEAD` vs the working tree (uncommitted changes) |
-| **LaTeX Diff: Compare this file with…** | Set `--main` to the current `.tex`, then generate |
+| **LaTeX Diff: Compare this file with…** | Use the current `.tex` as `--main` for this run, then generate |
 | **LaTeX Diff: Open output folder** | Reveal the output directory in Explorer |
 | **LaTeX Diff: Show log** | Focus the **LaTeX Diff** output channel |
 | **LaTeX Diff: Refresh commits** | Reload commit labels |
+| **LaTeX Diff: Reset panel choices** | Forget the checkboxes and picks made in the panel, so `latexDiff.*` settings apply again |
 
 ## Settings
 
-Panel checkboxes and picks write **workspace** settings when a folder is open (so each paper can differ). You can also edit them in Settings.
+Settings are never written to your repository. Checkboxes and picks made in the panel are stored in VS Code’s own per-workspace storage (not in `.vscode/settings.json`), so each paper can differ and your repo stays clean. A panel choice **overrides** the matching `latexDiff.*` setting; run **LaTeX Diff: Reset panel choices** to clear them. Settings (user, workspace, or `.vscode/settings.json` you commit yourself) are the defaults for anything you did not choose in the panel.
 
 | Setting | Default | Meaning |
 |---------|---------|---------|
-| `latexDiff.mainFile` | `""` | Main `.tex` relative to the repo root. Empty = auto (setting, then the active `.tex`, then a unique `\documentclass` file, then a picker) |
+| `latexDiff.mainFile` | `""` | Main `.tex` relative to the repo root. Empty = auto: the active `.tex` if it contains `\documentclass`, else the single file in the repo that does, else a picker. Section files are never picked automatically |
 | `latexDiff.outputDir` | `diffs` | Output directory for revision PDFs |
 | `latexDiff.outputFile` | `""` | Optional name inside `outputDir`. Empty = `diff-<old>-<new>.pdf` |
 | `latexDiff.buildDir` | `""` | Folder where latexmk writes the PDF during the diff build (`--build-dir`), relative to the repo root. Empty = auto, from a `.latexmkrc` beside the main file. See [Build directory](#build-directory) |
@@ -132,7 +135,9 @@ Do not put `--view`, `--pdf-viewer`, or the Old/New revisions in `extraArgs`. `-
 |---------|-------------|
 | `git-latexdiff is not available` | Install `git-latexdiff`, confirm `git latexdiff --help` in a terminal, restart the editor |
 | File does not exist in old revision | The Old commit predates that `.tex` file. Pick a later commit |
-| Progress runs a long time | Normal. Use **Show log** |
+| Progress runs a long time | Normal. Use **Show log**, or **Cancel** on the notification |
+| A setting in `settings.json` is ignored | A choice made in the panel overrides it. Run **LaTeX Diff: Reset panel choices** |
+| `Could not find a main .tex file` | Open the main file (the one with `\documentclass`), or set **Main .tex** in Options |
 | PDF missing after exit 0 | Open the log; the tool may have written a different path |
 | `No PDF file generated` / `Expected PDF: …` | `git-latexdiff` looked for the PDF in a different folder than the one latexmk wrote to. No `.latexmkrc` in your project: clear **Build dir** (`latexDiff.buildDir`). A `.latexmkrc` that sets `$out_dir`: set **Build dir** to that `$out_dir`. See [Build directory](#build-directory) |
 | Last Commit PDF looks empty | No uncommitted edits, or they match `HEAD`. Edit the `.tex` first, or pick two commits under Options |
@@ -151,12 +156,15 @@ npm test
 |------|------|
 | `src/extension.ts` | Commands, progress, errors |
 | `src/sidebar.ts` | Activity Bar tree |
-| `src/config.ts` | Settings and `extraArgs` |
+| `src/config.ts` | Settings, panel choices (workspace storage), and `extraArgs` |
+| `src/choices.ts` | Panel choice vs setting precedence (no `vscode` import, unit tested) |
+| `src/exclusive.ts` | One-diff-at-a-time lock (no `vscode` import, unit tested) |
+| `src/tex.ts` | `\documentclass` detection (no `vscode` import, unit tested) |
 | `src/buildDir.ts` | `--build-dir` logic and the "No PDF" error text (no `vscode` import, unit tested) |
 | `src/test/` | `node --test` unit tests (`npm test`) |
 | `src/session.ts` | Stored Old/New revisions |
 | `src/git.ts` | Repo root, log, `cat-file` checks |
-| `src/latexdiff.ts` | Builds and spawns `git latexdiff` |
+| `src/latexdiff.ts` | Builds and spawns `git latexdiff`; cancellation kills the whole process tree |
 | `src/mainFile.ts` | Resolves the main `.tex` |
 
 `npm run package` builds the VSIX (`out/` is compiled JavaScript; source stays in `src/`).
