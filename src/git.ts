@@ -1,4 +1,6 @@
 import { execFile } from "child_process";
+import * as fs from "fs/promises";
+import * as path from "path";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
@@ -63,6 +65,26 @@ export async function fileExistsInCommit(
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Text of a file at a revision (or in the working tree for "--"); undefined if absent. */
+export async function readTextAtRevision(
+  repoRoot: string,
+  revision: string,
+  relativePath: string
+): Promise<string | undefined> {
+  try {
+    if (revision === WORKING_TREE_HASH) {
+      return await fs.readFile(path.join(repoRoot, relativePath), "utf8");
+    }
+    const { stdout } = await execFileAsync("git", ["show", `${revision}:${relativePath}`], {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return stdout;
+  } catch {
+    return undefined;
   }
 }
 

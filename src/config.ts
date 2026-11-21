@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import * as vscode from "vscode";
 
 export const BIBLIOGRAPHIES = ["none", "bibtex", "biber"] as const;
@@ -91,44 +89,6 @@ export function parseOutputInput(
     return { outputDir: currentDir || "diffs", outputFile: trimmed };
   }
   return { outputDir: trimmed.replace(/\/$/, "") || "diffs", outputFile: "" };
-}
-
-export function extraArgsHasBuildDir(extraArgs: string[]): boolean {
-  return extraArgs.some((arg) => arg === "--build-dir" || arg.startsWith("--build-dir="));
-}
-
-export function normalizeBuildDir(raw: string): string {
-  let value = raw.trim().replace(/\\/g, "/");
-  value = value.replace(/%DIR%\//gi, "").replace(/%DIR%/gi, "");
-  value = value.replace(/%OUTDIR%\//gi, "").replace(/%OUTDIR%/gi, "");
-  value = value.replace(/^\/+/, "").replace(/\/+$/, "");
-  if (!value || value === ".") {
-    return "";
-  }
-  return value;
-}
-
-export function parseLatexmkOutDir(text: string): string {
-  const match = text.match(/\$out_dir\s*=\s*['"]([^'"]+)['"]/);
-  return match ? normalizeBuildDir(match[1]) : "";
-}
-
-export function resolveBuildDir(repoRoot: string, configured: string): string {
-  const explicit = normalizeBuildDir(configured);
-  if (explicit) {
-    return explicit;
-  }
-  const workshop = vscode.workspace.getConfiguration("latex-workshop").get<string>("latex.outDir") ?? "";
-  const fromWorkshop = normalizeBuildDir(workshop);
-  if (fromWorkshop) {
-    return fromWorkshop;
-  }
-  try {
-    const rc = fs.readFileSync(path.join(repoRoot, ".latexmkrc"), "utf8");
-    return parseLatexmkOutDir(rc);
-  } catch {
-    return "";
-  }
 }
 
 export async function updateConfig(key: string, value: unknown): Promise<void> {

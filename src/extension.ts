@@ -1,13 +1,20 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import {
+  expectedPdfFrom,
+  extraArgsHasBuildDir,
+  isNoPdfFailure,
+  latexmkrcCandidates,
+  noPdfMessage,
+  normalizeBuildDir,
+  resolveBuildDir,
+} from "./buildDir";
+import {
   BIBLIOGRAPHIES,
   ENGINES,
-  extraArgsHasBuildDir,
   outputDisplay,
   parseOutputInput,
   readSettings,
-  resolveBuildDir,
   updateConfig,
   type BoolSetting,
 } from "./config";
@@ -19,6 +26,7 @@ import {
   findRepoRoot,
   gitLatexdiffAvailable,
   listCommits,
+  readTextAtRevision,
   type GitCommit,
 } from "./git";
 import { runGitLatexdiff } from "./latexdiff";
@@ -116,6 +124,32 @@ async function ensureTexInCommits(
   }
 }
 
+/**
+ * `--build-dir` value to pass, or "" for none. Only an explicit latexDiff.buildDir
+ * or a .latexmkrc beside the main file (read from the New revision, because that
+ * is the tree git-latexdiff compiles) can produce one. See src/buildDir.ts.
+ */
+async function effectiveBuildDir(
+  repoRoot: string,
+  mainFile: string,
+  newCommit: string,
+  flags: ReturnType<typeof readSettings>
+): Promise<string> {
+  if (!flags.latexmk || extraArgsHasBuildDir(flags.extraArgs)) {
+    return "";
+  }
+  let latexmkrcText: string | undefined;
+  if (!normalizeBuildDir(flags.buildDir)) {
+    for (const candidate of latexmkrcCandidates(mainFile)) {
+      latexmkrcText = await readTextAtRevision(repoRoot, newCommit, candidate);
+      if (latexmkrcText !== undefined) {
+        break;
+      }
+    }
+  }
+  return resolveBuildDir({ configured: flags.buildDir, mainFile, latexmkrcText });
+}
+
 async function generateDiff(opts: {
   mainFile?: string;
   oldCommit: string;
@@ -132,9 +166,7 @@ async function generateDiff(opts: {
   await ensureTexInCommits(repoRoot, mainFile, opts.oldCommit, opts.newCommit);
 
   const flags = readSettings();
-  const buildDir = extraArgsHasBuildDir(flags.extraArgs)
-    ? ""
-    : resolveBuildDir(repoRoot, flags.buildDir);
+  const buildDir = await effectiveBuildDir(repoRoot, mainFile, opts.newCommit, flags);
   const channel = logChannel();
   channel.clear();
   channel.show(true);
@@ -179,9 +211,13 @@ async function generateDiff(opts: {
 
   if (result.exitCode !== 0) {
     const combined = `${result.stdout}\n${result.stderr}`;
-    if (/No PDF file generated/i.test(combined) || /Expected PDF:/i.test(combined)) {
+    if (isNoPdfFailure(combined)) {
       throw new Error(
-        `git latexdiff failed (exit ${result.exitCode}): latexmk wrote the PDF under a build folder, but git-latexdiff looked in the project root. Set latexDiff.buildDir (for example build) or add --build-dir to extraArgs. See the LaTeX Diff output channel.`
+        noPdfMessage({
+          exitCode: result.exitCode,
+          expectedPdf: expectedPdfFrom(combined),
+          passedBuildDir: buildDir,
+        })
       );
     }
     throw new Error(
@@ -353,18 +389,12 @@ async function commandPickOutput(): Promise<void> {
 
 async function commandPickBuildDir(): Promise<void> {
   const settings = readSettings();
-  let placeholder = settings.buildDir;
-  try {
-    const repoRoot = await findRepoRoot(workspaceCwd());
-    placeholder = resolveBuildDir(repoRoot, settings.buildDir) || settings.buildDir;
-  } catch {
-    // not a git repo
-  }
   const value = await vscode.window.showInputBox({
     title: "LaTeX Diff: latexmk build directory",
     value: settings.buildDir,
-    placeHolder: placeholder || "build",
-    prompt: "Relative folder where latexmk writes the PDF (--build-dir). Empty = auto-detect.",
+    placeHolder: "Leave empty unless .latexmkrc sets $out_dir",
+    prompt:
+      "Folder, relative to the repository root, where latexmk writes the PDF during the diff build (--build-dir). Only needed when a .latexmkrc beside the main file sets $out_dir; LaTeX Workshop's outDir does not apply. Empty = auto-detect from that .latexmkrc.",
   });
   if (value === undefined) {
     return;

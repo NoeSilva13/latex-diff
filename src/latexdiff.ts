@@ -1,7 +1,8 @@
 import { spawn } from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { extraArgsHasBuildDir, type Bibliography, type Engine } from "./config";
+import { extraArgsHasBuildDir } from "./buildDir";
+import type { Bibliography, Engine } from "./config";
 import { WORKING_TREE_HASH } from "./git";
 
 export interface LatexDiffOptions {
